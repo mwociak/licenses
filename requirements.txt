@@ -1,0 +1,9 @@
+django
+customtkinter
+yt-dlp
+requests
+packaging
+gunicorn
+dj-database-url
+psycopg2-binary
+whitenoise
