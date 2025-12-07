@@ -1,9 +1,8 @@
 # Blueprint specification for Render.
 # See the docs for more details: https://render.com/docs/blueprint-spec
-
 services:
   # A PostgreSQL database for the Django application
-  - type: psql
+  - type: postgres
     name: license-db
     plan: free # 'free' tier may have limitations.
     # Specify the major version of PostgreSQL.
@@ -22,7 +21,7 @@ services:
     envVars:
       - key: DATABASE_URL
         fromService:
-          type: psql
+          type: postgres
           name: license-db
           property: connectionString
       - key: SECRET_KEY
