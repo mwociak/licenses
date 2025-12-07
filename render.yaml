@@ -1,15 +1,23 @@
-# Plik konfiguracyjny dla Render.
-# Dokumentacja: https://render.com/docs/blueprint-spec
+# Blueprint specification for Render.
+# See the docs for more details: https://render.com/docs/blueprint-spec
 
 services:
-  # Serwis webowy dla aplikacji Django
+  # A PostgreSQL database for the Django application
+  - type: psql
+    name: license-db
+    plan: free # 'free' tier may have limitations.
+    # Specify the major version of PostgreSQL.
+    postgresMajorVersion: 14
+
+  # A web service for the Django application
   - type: web
     name: license-server-django
-    # Użyj środowiska Python 3. Starsze wersje Django mogą wymagać starszego Pythona.
     env: python
-    pythonVersion: "3.11" # Możesz zmienić na wersję, której używasz
-    plan: free # Użyj planu darmowego
+    pythonVersion: "3.11"
+    plan: free # 'free' tier may have limitations.
+    # Commands to build the service
     buildCommand: "./build.sh"
+    # Command to start the Gunicorn server
     startCommand: "gunicorn myproject.wsgi:application"
     envVars:
       - key: DATABASE_URL
@@ -18,14 +26,6 @@ services:
           name: license-db
           property: connectionString
       - key: SECRET_KEY
-        generateValue: true # Render automatycznie wygeneruje bezpieczny klucz
+        generateValue: true # Let Render generate a secure secret key
       - key: WEB_CONCURRENCY
-        value: 4 # Zalecane dla planu darmowego
-
-  # Baza danych PostgreSQL
-  - type: psql
-    name: license-db
-    plan: free # Użyj planu darmowego
-    # Wersja PostgreSQL, Render może mieć nowsze wersje
-    postgresMajorVersion: 14
-
+        value: 4 # Recommended for free instances
