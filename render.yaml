@@ -12,7 +12,7 @@ databases:
 services:
   - type: web
     name: license-server-django
-    runtime: python@3.11
+    runtime: python
     plan: free
     buildCommand: "./build.sh"
     startCommand: "gunicorn myproject.wsgi:application"
