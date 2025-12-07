@@ -37,10 +37,15 @@ def register_machine(machine_id: str, metadata: dict = None) -> Machine:
     )
 
     LicenseAudit.objects.create(
-        event_type='register_machine',
-        machine_id=machine_id,
-        details={'created': created, 'metadata': metadata or {}}
-    )
+    event_type='generate_license',
+    machine_id=machine_id,
+    license_key=license_key,
+    details={
+        'valid_until': valid_until.isoformat() if valid_until else None,
+        'payload': payload
+    }
+)
+
     return machine
 
 def _create_signature(machine_id: str, valid_from: datetime, valid_until: datetime, payload: dict) -> str:
