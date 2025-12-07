@@ -1,4 +1,3 @@
-# render.yaml
 databases:
   - name: license-db
     plan: free
