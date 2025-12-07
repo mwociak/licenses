@@ -1,13 +1,18 @@
+# render.yaml
+# Blueprint specification for Render
+# Documentation: https://render.com/docs/blueprint-spec
+
+# Baza danych PostgreSQL
 databases:
   - name: license-db
     plan: free
     postgresMajorVersion: 14
 
+# Usługi webowe
 services:
   - type: web
     name: license-server-django
-    runtime: python
-    pythonVersion: "3.11"
+    runtime: python@3.11
     plan: free
     buildCommand: "./build.sh"
     startCommand: "gunicorn myproject.wsgi:application"
