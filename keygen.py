@@ -3,7 +3,7 @@ import hashlib
 import time
 import argparse
 
-SECRET = "TU_WKLEJ_SECRET_Z_BAZY"  # np. z SELECT secret FROM license_secret
+SECRET = "wzkL258k0tPdIAfpu1nwBKoLQQv+dZHby9tvrth7xI8="  # np. z SELECT secret FROM license_secret
 
 def generate_license(machine_id, days_valid=365):
     expires = int(time.time() + days_valid * 86400)
@@ -13,16 +13,23 @@ def generate_license(machine_id, days_valid=365):
         payload.encode(),
         hashlib.sha256
     ).hexdigest()
-    return signature, expires
+    return f"{signature}.{expires}"
 
-def verify_license(machine_id, license_key, expires):
+def verify_license(machine_id, license_string):
+    try:
+        signature, expires_str = license_string.split('.')
+        expires = int(expires_str)
+    except ValueError:
+        return False  # Invalid license format
+
     payload = f"{machine_id}|{expires}"
-    expected = hmac.new(
+    expected_signature = hmac.new(
         SECRET.encode(),
         payload.encode(),
         hashlib.sha256
     ).hexdigest()
-    return expected == license_key and time.time() < expires
+
+    return hmac.compare_digest(expected_signature, signature) and time.time() < expires
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -30,6 +37,5 @@ if __name__ == "__main__":
     parser.add_argument("--days", type=int, default=365)
     args = parser.parse_args()
 
-    key, exp = generate_license(args.machine_id, args.days)
-    print("License Key:", key)
-    print("Expires:", exp)
+    license_key = generate_license(args.machine_id, args.days)
+    print("License Key:", license_key)

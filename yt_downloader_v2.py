@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import time
 import hashlib
+import hmac
 import platform
 import json
 import requests
@@ -17,10 +18,12 @@ import requests
 # ============================================================
 
 LOG_FILE = os.path.join(tempfile.gettempdir(), "ytdownloader_debug.log")
-CURRENT_VERSION = "3.0.0" # Wersja z architekturą Klient-Serwer
+CURRENT_VERSION = "3.0.0"  # Wersja z architekturą Klient-Serwer
 
 # Adres URL serwera API. Zmienna środowiskowa lub domyślny lokalny serwer.
 API_BASE_URL = os.environ.get("LICENSE_API_URL", "http://127.0.0.1:8000")
+
+SECRET = "wzkL258k0tPdIAfpu1nwBKoLQQv+dZHby9tvrth7xI8="
 
 def log_message(message):
     """Zapisuje wiadomość do pliku logów."""
@@ -33,7 +36,7 @@ def log_message(message):
 log_message("Application starting...")
 
 # ============================================================
-# NOWY SYSTEM LICENCJONOWANIA (Klient API)
+# FUNKCJE POMOCNICZE LICENCJI
 # ============================================================
 
 def get_machine_id():
@@ -48,11 +51,11 @@ def get_local_license_path():
     os.makedirs(dir_path, exist_ok=True)
     return os.path.join(dir_path, "license.key")
 
-def save_license_key(key):
+def save_license_key(license_string):
     """Zapisuje klucz licencji lokalnie."""
     try:
         with open(get_local_license_path(), "w") as f:
-            f.write(key)
+            f.write(license_string)
         return True
     except Exception as e:
         log_message(f"Error saving license key: {e}")
@@ -66,18 +69,24 @@ def load_license_key():
             return f.read().strip()
     return None
 
-def verify_license_with_server(license_key, machine_id):
+def verify_license_with_server(license_string, machine_id):
     """Wysyła prośbę o weryfikację licencji do serwera API."""
     url = f"{API_BASE_URL}/api/verify"
     try:
-        payload = {'license_key': license_key, 'machine_id': machine_id}
+        signature, expires_str = license_string.split('.')
+        expires = int(expires_str)
+        
+        payload = {'license_key': signature, 'machine_id': machine_id, 'expires': expires}
         response = requests.post(url, json=payload, timeout=15)
+        
         if response.status_code == 200:
             return response.json()
         return {'valid': False, 'reason': f'server_status_{response.status_code}'}
     except requests.RequestException as e:
         log_message(f"API verification request failed: {e}")
         return {'valid': False, 'reason': 'connection_error'}
+    except (ValueError, IndexError):
+        return {'valid': False, 'reason': 'invalid_key_format'}
 
 def get_trial_license_from_server(machine_id):
     """Prosi serwer o wygenerowanie licencji próbnej."""
@@ -92,6 +101,33 @@ def get_trial_license_from_server(machine_id):
         log_message(f"API trial generation request failed: {e}")
         return {'success': False, 'reason': 'connection_error'}
 
+def verify_license_local(machine_id, license_string):
+    """Weryfikacja licencji offline przy użyciu HMAC-SHA256."""
+    try:
+        signature, expires_str = license_string.split('.')
+        expires = int(expires_str)
+    except (ValueError, IndexError):
+        log_message("Offline license verification failed: invalid format")
+        return False
+
+    payload = f"{machine_id}|{expires}"
+    expected_signature = hmac.new(
+        SECRET.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    # Używamy hmac.compare_digest dla bezpieczeństwa
+    if hmac.compare_digest(expected_signature, signature) and time.time() < expires:
+        return True
+    else:
+        log_message("Offline license verification failed: signature or expiry mismatch")
+        return False
+
+# ============================================================
+# GŁÓWNA FUNKCJA WERYFIKACJI LICENCJI
+# ============================================================
+
 def run_license_check():
     """Główna funkcja sprawdzająca licencję przy starcie."""
     machine_id = get_machine_id()
@@ -104,46 +140,74 @@ def run_license_check():
     if stored_key:
         print("Znaleziono zapisany klucz licencji. Weryfikuję...")
         result = verify_license_with_server(stored_key, machine_id)
+        
         if result.get('valid'):
-            print("Licencja jest aktywna. Uruchamiam aplikację.")
+            print("✅ Licencja jest aktywna. Uruchamiam aplikację.")
             log_message("License verified successfully with stored key.")
             time.sleep(2)
             return True
         else:
-            print(f"Weryfikacja nie powiodła się (powód: {result.get('reason', 'nieznany')}).")
-            log_message(f"Stored key validation failed: {result.get('reason')}")
+            print(f"Weryfikacja serwerowa nie powiodła się (powód: {result.get('reason', 'nieznany')}).")
+            log_message(f"Stored key validation failed via server: {result.get('reason')}")
+
+            # 🔁 Fallback offline
+            print("⚠️ Próbuję weryfikacji w trybie offline...")
+            if verify_license_local(machine_id, stored_key):
+                print("✅ Licencja poprawna (tryb offline). Uruchamiam aplikację.")
+                log_message("License verified offline with stored key.")
+                time.sleep(2)
+                return True
+            print("❌ Weryfikacja offline również nie powiodła się.")
 
     # Jeśli nie ma klucza lub jest nieprawidłowy, prosimy o nowy lub generujemy trial
-    print("\nNie znaleziono aktywnej licencji.")
+    print("\nNie znaleziono aktywnej licencji lub istniejąca jest nieprawidłowa.")
     choice = input("Wpisz 'TRIAL' aby aktywować licencję próbną lub wklej swój klucz licencji: ").strip()
 
     if choice.upper() == 'TRIAL':
         print("Kontaktuję się z serwerem, aby uzyskać licencję próbną...")
         trial_result = get_trial_license_from_server(machine_id)
-        if trial_result.get('success'):
+        if trial_result.get('success') and trial_result.get('license_key'):
             new_key = trial_result.get('license_key')
             save_license_key(new_key)
-            print("Licencja próbna aktywowana pomyślnie!")
+            print("✅ Licencja próbna aktywowana pomyślnie!")
             log_message(f"Trial license obtained and saved: {new_key}")
             time.sleep(2)
             return True
         else:
-            print(f"Nie udało się uzyskać licencji próbnej (powód: {trial_result.get('reason', 'nieznany')}).")
+            print(f"❌ Nie udało się uzyskać licencji próbnej (powód: {trial_result.get('reason', 'nieznany')}).")
             log_message(f"Failed to get trial license: {trial_result.get('reason')}")
             time.sleep(4)
             return False
     else:
+        # Użytkownik wkleił klucz
+        if not choice:
+            print("❌ Nie wprowadzono klucza. Zamykanie.")
+            time.sleep(2)
+            return False
+
         print("Weryfikuję podany klucz...")
         verify_result = verify_license_with_server(choice, machine_id)
+        
         if verify_result.get('valid'):
             save_license_key(choice)
-            print("Licencja aktywowana pomyślnie!")
+            print("✅ Licencja aktywowana pomyślnie!")
             log_message(f"New license validated and saved: {choice}")
             time.sleep(2)
             return True
         else:
-            print(f"Podany klucz jest nieprawidłowy (powód: {verify_result.get('reason', 'nieznany')}).")
+            print(f"❌ Podany klucz jest nieprawidłowy lub serwer go odrzucił (powód: {verify_result.get('reason', 'nieznany')}).")
             log_message(f"User-provided key was invalid: {verify_result.get('reason')}")
+
+            # 🔁 Fallback offline dla nowo wprowadzonego klucza
+            print("⚠️ Próbuję weryfikacji w trybie offline...")
+            if verify_license_local(machine_id, choice):
+                save_license_key(choice)
+                print("✅ Licencja poprawna (tryb offline). Aktywowano.")
+                log_message("User-provided key verified offline and saved.")
+                time.sleep(2)
+                return True
+            
+            print("❌ Klucz nieprawidłowy również w trybie offline. Zamykanie aplikacji.")
             time.sleep(4)
             return False
 
