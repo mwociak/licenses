@@ -1,31 +1,27 @@
-# Blueprint specification for Render.
-# See the docs for more details: https://render.com/docs/blueprint-spec
+# render.yaml
+# Blueprint specification for Render
+# Documentation: https://render.com/docs/blueprint-spec
 
-services:
-  # A PostgreSQL database for the Django application
-  - type: psql
-    name: license-db
-    plan: free # 'free' tier may have limitations.
-    # Specify the major version of PostgreSQL.
+# Baza danych PostgreSQL
+databases:
+  - name: license-db
+    plan: free
     postgresMajorVersion: 14
 
-  # A web service for the Django application
+# Usługi webowe
+services:
   - type: web
     name: license-server-django
-    env: python
-    pythonVersion: "3.11"
-    plan: free # 'free' tier may have limitations.
-    # Commands to build the service
+    runtime: python
+    plan: free
     buildCommand: "./build.sh"
-    # Command to start the Gunicorn server
     startCommand: "gunicorn myproject.wsgi:application"
     envVars:
       - key: DATABASE_URL
-        fromService:
-          type: psql
+        fromDatabase:
           name: license-db
           property: connectionString
       - key: SECRET_KEY
-        generateValue: true # Let Render generate a secure secret key
+        generateValue: true
       - key: WEB_CONCURRENCY
-        value: 4 # Recommended for free instances
+        value: 4

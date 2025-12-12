@@ -14,7 +14,6 @@ except RuntimeError:
     pass
 
 from myapp.models import Machine, License, LicenseAudit
-
 from django.conf import settings
 
 # Klucz symetryczny do podpisywania licencji.
@@ -22,11 +21,13 @@ from django.conf import settings
 SECRET_KEY = settings.SECRET_KEY
 SIGNATURE_ALGO = 'sha256'
 
+
 def get_machine_id():
     """Generuje unikalny identyfikator maszyny (taki sam jak w starym skrypcie)."""
     import platform
     machine_info = f"{platform.node()}-{platform.machine()}-{platform.processor()}"
     return hashlib.md5(machine_info.encode()).hexdigest()[:16]
+
 
 def register_machine(machine_id: str, metadata: dict = None) -> Machine:
     """
@@ -37,21 +38,20 @@ def register_machine(machine_id: str, metadata: dict = None) -> Machine:
         machine_id=machine_id,
         defaults={'last_seen': datetime.now(timezone.utc), 'metadata': metadata or {}}
     )
-
-
-
     return machine
+
 
 def _create_signature(machine_id: str, valid_from: datetime, valid_until: datetime, payload: dict) -> str:
     """Tworzy podpis HMAC dla danych licencji."""
     valid_from_str = valid_from.isoformat()
     valid_until_str = valid_until.isoformat() if valid_until else 'NULL'
     payload_str = str(payload)
-    
+
     raw_data = f"{machine_id}|{valid_from_str}|{valid_until_str}|{payload_str}"
-    
+
     signature = hmac.new(SECRET_KEY.encode(), raw_data.encode(), SIGNATURE_ALGO)
     return signature.hexdigest()
+
 
 def generate_license_key(machine_id: str, valid_days: int = None, payload: dict = None) -> License:
     """
@@ -66,7 +66,7 @@ def generate_license_key(machine_id: str, valid_days: int = None, payload: dict 
     valid_until = None
     if valid_days:
         valid_until = valid_from + timedelta(days=valid_days)
-        
+
     license_key = f"MCP-{uuid.uuid4().hex.upper()}"
     payload = payload or {}
 
@@ -85,10 +85,14 @@ def generate_license_key(machine_id: str, valid_days: int = None, payload: dict 
         event_type='generate_license',
         machine_id=machine_id,
         license_key=license_key,
-        details={'valid_until': valid_until.isoformat() if valid_until else 'NULL', 'payload': payload}
+        details={
+            'valid_until': valid_until.isoformat() if valid_until else 'NULL',
+            'payload': payload
+        }
     )
-    
+
     return license_obj
+
 
 def verify_license(machine_id: str, license_key: str) -> (bool, str, License | None):
     """
@@ -108,7 +112,7 @@ def verify_license(machine_id: str, license_key: str) -> (bool, str, License | N
 
     if license_obj.valid_until and license_obj.valid_until < datetime.now(timezone.utc):
         return False, 'license_expired', None
-        
+
     # Weryfikacja podpisu
     expected_signature = _create_signature(
         license_obj.machine.machine_id,
