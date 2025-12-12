@@ -1,4 +1,5 @@
 import json
+import traceback
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -41,6 +42,7 @@ def verify_license_api(request):
     except json.JSONDecodeError:
         return JsonResponse({'valid': False, 'reason': 'invalid_json'}, status=400)
     except Exception as e:
+        traceback.print_exc()
         return JsonResponse({'valid': False, 'reason': f'server_error: {str(e)}'}, status=500)
 
 @csrf_exempt
@@ -78,6 +80,7 @@ def register_and_generate_trial_api(request):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'reason': 'invalid_json'}, status=400)
     except Exception as e:
+        traceback.print_exc()
         return JsonResponse({'success': False, 'reason': f'server_error: {str(e)}'}, status=500)
 
 @require_http_methods(["GET"])
