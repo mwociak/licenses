@@ -5,13 +5,7 @@ import hmac
 import uuid
 from datetime import datetime, timedelta, timezone
 
-# Konfiguracja środowiska Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myproject.settings')
-try:
-    django.setup()
-except RuntimeError:
-    # Django has already been configured
-    pass
+
 
 from myapp.models import Machine, License, LicenseAudit
 from django.conf import settings
