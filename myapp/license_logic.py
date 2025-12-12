@@ -15,9 +15,11 @@ except RuntimeError:
 
 from myapp.models import Machine, License, LicenseAudit
 
+from django.conf import settings
+
 # Klucz symetryczny do podpisywania licencji.
 # W prawdziwej aplikacji powinien być przechowywany bezpiecznie, np. w zmiennej środowiskowej.
-SECRET_KEY = "your-super-secret-key-that-no-one-will-guess"
+SECRET_KEY = settings.SECRET_KEY
 SIGNATURE_ALGO = 'sha256'
 
 def get_machine_id():
@@ -36,11 +38,8 @@ def register_machine(machine_id: str, metadata: dict = None) -> Machine:
         defaults={'last_seen': datetime.now(timezone.utc), 'metadata': metadata or {}}
     )
 
-    LicenseAudit.objects.create(
-        event_type='register_machine',
-        machine_id=machine_id,
-        details={'created': created, 'metadata': metadata or {}}
-    )
+
+
     return machine
 
 def _create_signature(machine_id: str, valid_from: datetime, valid_until: datetime, payload: dict) -> str:
